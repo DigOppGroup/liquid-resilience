@@ -1,0 +1,11 @@
+{
+  "detectors_to_exclude": "naming-convention,similar-names,solc-version",
+  "filter_paths": "(lib/|test/)",
+  "solc_remaps": [
+    "ds-test/=lib/forge-std/lib/ds-test/src/",
+    "forge-std/=lib/forge-std/src/",
+    "velodrome-finance/=lib/velodrome-finance/",
+    "openzeppelin-contracts/=lib/openzeppelin-contracts/"
+  ]
+
+}
