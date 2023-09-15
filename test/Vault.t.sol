@@ -19,7 +19,16 @@ contract VaultTest is Test, TestHelpers {
     function setUp() public {
         factory = new VaultFactory(basisPointFee);
         vault = Vault(
-            factory.createVault(MAKER, makerRevBasisPoints, MAKER_TOKEN, DEFAULT_MATURITY, ROUTER, STABLE, TAKER_TOKEN)
+            factory.createVault(
+                MAKER,
+                makerRevBasisPoints,
+                MAKER_TOKEN,
+                DEFAULT_MATURITY,
+                ROUTER,
+                slippageBasisPoints,
+                STABLE,
+                TAKER_TOKEN
+            )
         );
     }
 
@@ -28,29 +37,31 @@ contract VaultTest is Test, TestHelpers {
 
         vm.expectRevert(abi.encodeWithSelector(VaultFactory.ExceedsMaxBPS.selector, excessFees, factory.BPS()));
         vault = new Vault(
-                excessFees,
-                MAKER,
-                makerRevBasisPoints,
-                MAKER_TOKEN,
-                DEFAULT_MATURITY,
-                ROUTER,
-                STABLE,
-                TAKER_TOKEN
-            );
+            excessFees,
+            MAKER,
+            makerRevBasisPoints,
+            MAKER_TOKEN,
+            DEFAULT_MATURITY,
+            ROUTER,
+            slippageBasisPoints,
+            STABLE,
+            TAKER_TOKEN
+        );
     }
 
     function testRevertWhen_MakerAddressIsZero() public {
         vm.expectRevert();
         vault = new Vault(
-                    basisPointFee,
-                    address(0),
-                    makerRevBasisPoints,
-                    MAKER_TOKEN,
-                    DEFAULT_MATURITY,
-                    ROUTER,
-                    STABLE,
-                    TAKER_TOKEN
-                );
+            basisPointFee,
+            address(0),
+            makerRevBasisPoints,
+            MAKER_TOKEN,
+            DEFAULT_MATURITY,
+            ROUTER,
+            slippageBasisPoints,
+            STABLE,
+            TAKER_TOKEN
+        );
     }
 
     function testRevertWhen_MakerRevenueCutTooLarge() public {
@@ -64,6 +75,7 @@ contract VaultTest is Test, TestHelpers {
             MAKER_TOKEN,
             DEFAULT_MATURITY,
             ROUTER,
+            slippageBasisPoints,
             STABLE,
             TAKER_TOKEN
         );
@@ -72,43 +84,46 @@ contract VaultTest is Test, TestHelpers {
     function testRevertWhen_MakerTokenAddressIsZero() public {
         vm.expectRevert();
         vault = new Vault(
-                        basisPointFee,
-                        MAKER,
-                        makerRevBasisPoints,
-                        address(0),
-                        DEFAULT_MATURITY,
-                        ROUTER,
-                        STABLE,
-                        TAKER_TOKEN
-                    );
+            basisPointFee,
+            MAKER,
+            makerRevBasisPoints,
+            address(0),
+            DEFAULT_MATURITY,
+            ROUTER,
+            slippageBasisPoints,
+            STABLE,
+            TAKER_TOKEN
+        );
     }
 
     function testRevertWhen_RouterAddressIsZero() public {
         vm.expectRevert();
         vault = new Vault(
-                            basisPointFee,
-                            MAKER,
-                            makerRevBasisPoints,
-                            MAKER_TOKEN,
-                            DEFAULT_MATURITY,
-                            address(0),
-                            STABLE,
-                            TAKER_TOKEN
-                        );
+            basisPointFee,
+            MAKER,
+            makerRevBasisPoints,
+            MAKER_TOKEN,
+            DEFAULT_MATURITY,
+            address(0),
+            slippageBasisPoints,
+            STABLE,
+            TAKER_TOKEN
+        );
     }
 
     function testRevertWhen_TakerTokenAddressIsZero() public {
         vm.expectRevert();
         vault = new Vault(
-                            basisPointFee,
-                            MAKER,
-                            makerRevBasisPoints,
-                            MAKER_TOKEN,
-                            DEFAULT_MATURITY,
-                            ROUTER,
-                            STABLE,
-                            address(0)
-                        );
+            basisPointFee,
+            MAKER,
+            makerRevBasisPoints,
+            MAKER_TOKEN,
+            DEFAULT_MATURITY,
+            ROUTER,
+            slippageBasisPoints,
+            STABLE,
+            address(0)
+        );
     }
 
     function test_ConstructorBuildsVault() public {
@@ -118,6 +133,7 @@ contract VaultTest is Test, TestHelpers {
         assertEq(vault.makerRevenueBasisPoints(), makerRevBasisPoints);
         assertEq(vault.makerToken(), MAKER_TOKEN);
         assertEq(vault.maturity(), DEFAULT_MATURITY);
+        assertEq(vault.slippageBasisPoints(), slippageBasisPoints);
         assertEq(vault.takerToken(), TAKER_TOKEN);
         assertEq(vault.router(), ROUTER);
     }

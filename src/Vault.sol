@@ -18,9 +18,10 @@ contract Vault {
     address public immutable makerToken;
     uint256 public immutable maturity;
     address public immutable router;
+    uint16 public slippageBasisPoints;
+    bool public immutable stable;
     address public immutable takerToken;
     bool public trancheCreationEnabled = true;
-    bool public immutable stable;
     address public immutable vaultFactory;
     uint16 public constant BPS = 10_000;
     address[] public tranches;
@@ -49,6 +50,7 @@ contract Vault {
         address _makerToken,
         uint256 _maturity,
         address _router,
+        uint16 _slippageBasisPoints,
         bool _stable,
         address _takerToken
     ) validBasisPoints(_feeBasisPoints) validBasisPoints(_makerRevenueBasisPoints) {
@@ -65,6 +67,7 @@ contract Vault {
         makerToken = _makerToken;
         maturity = _maturity;
         router = _router;
+        slippageBasisPoints = _slippageBasisPoints;
         stable = _stable;
         takerToken = _takerToken;
         vaultFactory = msg.sender;

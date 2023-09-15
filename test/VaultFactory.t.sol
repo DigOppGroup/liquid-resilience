@@ -31,14 +31,17 @@ contract VaultFactoryTest is Test, TestHelpers {
         address caller = address(403);
         vm.expectRevert(abi.encodeWithSelector(VaultFactory.NotOwner.selector, caller, address(this)));
         vm.prank(caller);
-        factory.createVault(MAKER, makerRevBasisPoints, MAKER_TOKEN, DEFAULT_MATURITY, ROUTER, STABLE, TAKER_TOKEN);
+        factory.createVault(
+            MAKER, makerRevBasisPoints, MAKER_TOKEN, DEFAULT_MATURITY, ROUTER, slippageBasisPoints, STABLE, TAKER_TOKEN
+        );
     }
 
     function test_FactoryCanBuildAVault() public {
         vm.expectEmit(true, false, false, false);
         emit VaultCreated(MAKER, address(0));
-        address v =
-            factory.createVault(MAKER, makerRevBasisPoints, MAKER_TOKEN, DEFAULT_MATURITY, ROUTER, STABLE, TAKER_TOKEN);
+        address v = factory.createVault(
+            MAKER, makerRevBasisPoints, MAKER_TOKEN, DEFAULT_MATURITY, ROUTER, slippageBasisPoints, STABLE, TAKER_TOKEN
+        );
 
         assertEq(Vault(v).vaultFactory(), address(factory));
         assertEq(Vault(v).maker(), MAKER);
@@ -61,13 +64,31 @@ contract VaultFactoryTest is Test, TestHelpers {
     function test_FactoryOwnerCanChangeFeesForVaults(uint16 newBasisPointFee) public {
         vm.assume(newBasisPointFee <= factory.BPS());
         Vault v1 = Vault(
-            factory.createVault(MAKER, makerRevBasisPoints, MAKER_TOKEN, DEFAULT_MATURITY, ROUTER, STABLE, TAKER_TOKEN)
+            factory.createVault(
+                MAKER,
+                makerRevBasisPoints,
+                MAKER_TOKEN,
+                DEFAULT_MATURITY,
+                ROUTER,
+                slippageBasisPoints,
+                STABLE,
+                TAKER_TOKEN
+            )
         );
 
         factory.setBasisPointFee(newBasisPointFee);
 
         Vault v2 = Vault(
-            factory.createVault(MAKER, makerRevBasisPoints, MAKER_TOKEN, DEFAULT_MATURITY, ROUTER, STABLE, TAKER_TOKEN)
+            factory.createVault(
+                MAKER,
+                makerRevBasisPoints,
+                MAKER_TOKEN,
+                DEFAULT_MATURITY,
+                ROUTER,
+                slippageBasisPoints,
+                STABLE,
+                TAKER_TOKEN
+            )
         );
 
         assertEq(v1.feeBasisPoints(), basisPointFee);

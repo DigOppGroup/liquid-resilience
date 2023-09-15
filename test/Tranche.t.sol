@@ -24,7 +24,16 @@ contract TrancheTest is Test, TestHelpers {
     function setUp() public {
         VaultFactory factory = new VaultFactory(basisPointFee);
         vault = Vault(
-            factory.createVault(MAKER, makerRevBasisPoints, MAKER_TOKEN, DEFAULT_MATURITY, ROUTER, STABLE, TAKER_TOKEN)
+            factory.createVault(
+                MAKER,
+                makerRevBasisPoints,
+                MAKER_TOKEN,
+                DEFAULT_MATURITY,
+                ROUTER,
+                slippageBasisPoints,
+                STABLE,
+                TAKER_TOKEN
+            )
         );
         tranche = getTranche();
     }

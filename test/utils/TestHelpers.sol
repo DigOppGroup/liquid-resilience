@@ -14,6 +14,7 @@ abstract contract TestHelpers {
     uint256 internal takerAmount = 1e6;
     uint16 internal basisPointFee = 1000; // 10%
     uint16 internal makerRevBasisPoints = 4500; // 45%
+    uint16 internal slippageBasisPoints = 150; // 1.5%
 
     ////////////////////////////////////////////////////////////////////////////////////
     // VELO PROTOCOL

@@ -19,7 +19,7 @@ contract VaultFactory {
         _;
     }
 
-    modifier validBasisPointFee(uint16 _feeBasisPoints) {
+    modifier validBasisPoints(uint16 _feeBasisPoints) {
         if (_feeBasisPoints > BPS) revert ExceedsMaxBPS({bps: _feeBasisPoints, maxBPS: BPS});
         _;
     }
@@ -28,7 +28,7 @@ contract VaultFactory {
     /// @param vaultAddress address of the newly created vault
     event VaultCreated(address indexed maker, address indexed vaultAddress);
 
-    constructor(uint16 _basisPointFee) validBasisPointFee(_basisPointFee) {
+    constructor(uint16 _basisPointFee) validBasisPoints(_basisPointFee) {
         owner = msg.sender;
         basisPointFee = _basisPointFee;
     }
@@ -38,6 +38,7 @@ contract VaultFactory {
     /// @param _makerToken address of token0 for the Velodrome pool, which will be provided by the taker
     /// @param _maturity block timestamp time in seconds when the vault matures
     /// @param _router address of the Velodrome Router
+    /// @param _slippageBasisPoints the maximum slippage in basis points that the maker is willing to accept
     /// @param _stable indicates if the pool is stable or volatile
     /// @param _takerToken address of token1 for the Velodrome pool, which will be provided by the taker
     /// @return address of the created vault
@@ -47,9 +48,16 @@ contract VaultFactory {
         address _makerToken,
         uint256 _maturity,
         address _router,
+        uint16 _slippageBasisPoints,
         bool _stable,
         address _takerToken
-    ) external onlyOwner validBasisPointFee(_makerRevenueBasisPoints) returns (address) {
+    )
+        external
+        onlyOwner
+        validBasisPoints(_makerRevenueBasisPoints)
+        validBasisPoints(_slippageBasisPoints)
+        returns (address)
+    {
         Vault vault = new Vault(
             basisPointFee,
             _maker,
@@ -57,6 +65,7 @@ contract VaultFactory {
             _makerToken,
             _maturity,
             _router,
+            _slippageBasisPoints,
             _stable,
             _takerToken
         );
@@ -67,7 +76,7 @@ contract VaultFactory {
 
     /// @notice the maximum fee is 10,000 basis points (or 100% of rewards)
     /// @param _basisPointFee new fee in basis points that will be paid to the owner of the factory
-    function setBasisPointFee(uint16 _basisPointFee) external onlyOwner validBasisPointFee(_basisPointFee) {
+    function setBasisPointFee(uint16 _basisPointFee) external onlyOwner validBasisPoints(_basisPointFee) {
         basisPointFee = _basisPointFee;
     }
 
