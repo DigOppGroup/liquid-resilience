@@ -18,7 +18,7 @@ contract Vault {
     address public immutable makerToken;
     uint256 public immutable maturity;
     address public immutable router;
-    uint16 public slippageBasisPoints;
+    uint16 private slippageBasisPoints;
     bool public immutable stable;
     address public immutable takerToken;
     bool public trancheCreationEnabled = true;
@@ -139,6 +139,19 @@ contract Vault {
     /// @return number of tranches
     function getTranchesSize() public view returns (uint256) {
         return tranches.length;
+    }
+
+    function getSlippageBasisPoints() public view returns (uint16) {
+        return slippageBasisPoints;
+    }
+
+    /// @param _slippageBasisPoints the new, maxium amount of slippage in basis points that the maker will accept
+    function setSlippageBasisPoints(uint16 _slippageBasisPoints)
+        external
+        authorized(maker)
+        validBasisPoints(_slippageBasisPoints)
+    {
+        slippageBasisPoints = _slippageBasisPoints;
     }
 
     function getPool() public view returns (address) {

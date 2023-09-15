@@ -133,7 +133,7 @@ contract VaultTest is Test, TestHelpers {
         assertEq(vault.makerRevenueBasisPoints(), makerRevBasisPoints);
         assertEq(vault.makerToken(), MAKER_TOKEN);
         assertEq(vault.maturity(), DEFAULT_MATURITY);
-        assertEq(vault.slippageBasisPoints(), slippageBasisPoints);
+        assertEq(vault.getSlippageBasisPoints(), slippageBasisPoints);
         assertEq(vault.takerToken(), TAKER_TOKEN);
         assertEq(vault.router(), ROUTER);
     }
