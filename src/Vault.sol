@@ -85,20 +85,21 @@ contract Vault {
     /// @return makerDeposit amount of token0 deposited by the maker into the tranche, which was added to the LP
     /// @return takerDeposit amount of token1 deposited by the taker into the tranche, which was added to the LP
     /// @return liquidity amount of LP tokens minted for the tranche
-    function createTranche(uint256 _takerAmount)
-        external
-        returns (address tranche, uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity)
-    {
+    function createTranche(uint256 _takerAmount) external returns (address, uint256, uint256, uint256) {
         if (!trancheCreationEnabled) revert TrancheCreationDisabled();
         if (_takerAmount == 0) revert InsufficientAmount({amount: _takerAmount});
         Tranche _tranche = new Tranche(block.timestamp + maturity, msg.sender);
         tranches.push(address(_tranche));
 
-        address pool = IRouter(router).poolFor(makerToken, takerToken, stable, IRouter(router).defaultFactory());
+        address pool = getPool();
         IERC20(takerToken).safeTransferFrom(msg.sender, address(this), _takerAmount);
-        uint256 makerBalance = IERC20(makerToken).balanceOf(address(this));
         (uint256 quoteAmountA, uint256 quoteAmountB,) = IRouter(router).quoteAddLiquidity(
-            makerToken, takerToken, stable, IPool(pool).factory(), makerBalance, _takerAmount
+            makerToken,
+            takerToken,
+            stable,
+            IPool(pool).factory(),
+            IERC20(makerToken).balanceOf(address(this)),
+            _takerAmount
         );
 
         bool makerTransferToTranche = IERC20(makerToken).transfer(address(_tranche), quoteAmountA);
