@@ -328,6 +328,21 @@ contract VaultTest is Test, TestHelpers {
         vm.stopPrank();
     }
 
+    function testRevertWhen_NonMakerTriesToSetSlippage() public {
+        address caller = address(403);
+
+        vm.expectRevert(abi.encodeWithSelector(Vault.Unauthorized.selector, caller, MAKER));
+        vm.startPrank(caller);
+        vault.setSlippageBasisPoints(1000);
+    }
+
+    function testRevertWhen_MakerTriesToSetSlippageTooHigh() public {
+        uint16 excessSlippage = vault.BPS() + 1000;
+        vm.expectRevert(abi.encodeWithSelector(VaultFactory.ExceedsMaxBPS.selector, excessSlippage, vault.BPS()));
+        vm.startPrank(MAKER);
+        vault.setSlippageBasisPoints(excessSlippage);
+    }
+
     function buildTestTranche() private {
         vm.startPrank(vault.maker());
         deal(MAKER_TOKEN, vault.maker(), makerAmount, true);
