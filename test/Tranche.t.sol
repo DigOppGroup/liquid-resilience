@@ -2,6 +2,7 @@
 pragma solidity 0.8.19;
 
 import {Test} from "forge-std/Test.sol";
+import {console} from "forge-std/console.sol";
 
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {IGauge} from "velodrome-finance/contracts/interfaces/IGauge.sol";
@@ -133,13 +134,16 @@ contract TrancheTest is Test, TestHelpers {
             vm.startPrank(TAKER);
             deal(TAKER_TOKEN, TAKER, takerAmount, true);
             ERC20(TAKER_TOKEN).approve(address(vault), takerAmount);
-            (address _tranche, uint256 m, uint256 t, uint256 l) = vault.createTranche(takerAmount);
+            (address _tranche, uint256 _makerDeposit, uint256 _takerDeposit, uint256 _liquidity) =
+                vault.createTranche(takerAmount);
             tranche = Tranche(_tranche);
-            makerDeposit = m;
-            takerDeposit = t;
-            liquidity = l;
+            makerDeposit = _makerDeposit;
+            takerDeposit = _takerDeposit;
+            liquidity = _liquidity;
             vm.stopPrank();
         }
-        return Tranche(vault.tranches(0));
+        uint256 i = vault.getTranchesSize() - 1;
+        address[] memory t = vault.tranches();
+        return Tranche(t[i]);
     }
 }

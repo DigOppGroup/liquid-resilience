@@ -7,5 +7,4 @@
     "velodrome-finance/=lib/velodrome-finance/",
     "openzeppelin-contracts/=lib/openzeppelin-contracts/"
   ]
-
 }

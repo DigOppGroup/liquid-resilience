@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.19;
 
+import {EnumerableSet} from "openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IPool} from "velodrome-finance/contracts/interfaces/IPool.sol";
 import {IRouter} from "velodrome-finance/contracts/interfaces/IRouter.sol";
@@ -10,6 +11,7 @@ import {Tranche} from "./Tranche.sol";
 
 /// @title Vault
 contract Vault {
+    using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
 
     uint16 public immutable feeBasisPoints;
@@ -24,7 +26,7 @@ contract Vault {
     bool public trancheCreationEnabled = true;
     address public immutable vaultFactory;
     uint16 public constant BPS = 10_000;
-    address[] public tranches;
+    EnumerableSet.AddressSet private _tranches;
 
     error ExceedsMaxBPS(uint256 bps, uint256 maxBPS);
     error InsufficientAmount(uint256 amount);
@@ -91,8 +93,9 @@ contract Vault {
     function createTranche(uint256 _takerAmount) external returns (address, uint256, uint256, uint256) {
         if (!trancheCreationEnabled) revert TrancheCreationDisabled();
         if (_takerAmount == 0) revert InsufficientAmount({amount: _takerAmount});
-        Tranche _tranche = new Tranche(block.timestamp + maturity, msg.sender);
-        tranches.push(address(_tranche));
+        Tranche tranche = new Tranche(block.timestamp + maturity, msg.sender);
+        //        tranches.push(address(tranche));
+        _tranches.add(address(tranche));
 
         address pool = getPool();
         IERC20(takerToken).safeTransferFrom(msg.sender, address(this), _takerAmount);
@@ -105,18 +108,18 @@ contract Vault {
             _takerAmount
         );
 
-        bool makerTransferToTranche = IERC20(makerToken).transfer(address(_tranche), quoteAmountA);
+        bool makerTransferToTranche = IERC20(makerToken).transfer(address(tranche), quoteAmountA);
         if (!makerTransferToTranche) {
-            revert TransferFailure({token: makerToken, to: address(_tranche), amount: quoteAmountA});
+            revert TransferFailure({token: makerToken, to: address(tranche), amount: quoteAmountA});
         }
-        bool takerTransferToTranche = IERC20(takerToken).transfer(address(_tranche), quoteAmountB);
+        bool takerTransferToTranche = IERC20(takerToken).transfer(address(tranche), quoteAmountB);
         if (!takerTransferToTranche) {
-            revert TransferFailure({token: takerToken, to: address(_tranche), amount: quoteAmountB});
+            revert TransferFailure({token: takerToken, to: address(tranche), amount: quoteAmountB});
         }
 
-        (uint256 _makerDeposit, uint256 _takerDeposit, uint256 _liquidity) = _tranche.addLiquidity();
+        (uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) = tranche.addLiquidity();
 
-        return (address(_tranche), _makerDeposit, _takerDeposit, _liquidity);
+        return (address(tranche), makerDeposit, takerDeposit, liquidity);
     }
 
     function makerWithdrawTokensFromVault(uint256 _amount) external authorized(maker) {
@@ -138,20 +141,24 @@ contract Vault {
 
     /// @return number of tranches
     function getTranchesSize() public view returns (uint256) {
-        return tranches.length;
+        return _tranches.length();
     }
 
     function getSlippageBasisPoints() public view returns (uint16) {
         return slippageBasisPoints;
     }
 
-    /// @param _slippageBasisPoints the new, maxium amount of slippage in basis points that the maker will accept
+    /// @param _slippageBasisPoints the new, maximum amount of slippage in basis points that the maker will accept
     function setSlippageBasisPoints(uint16 _slippageBasisPoints)
         external
         authorized(maker)
         validBasisPoints(_slippageBasisPoints)
     {
         slippageBasisPoints = _slippageBasisPoints;
+    }
+
+    function tranches() external view returns (address[] memory) {
+        return _tranches.values();
     }
 
     function getPool() public view returns (address) {
