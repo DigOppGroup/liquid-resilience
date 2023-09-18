@@ -4,7 +4,6 @@ pragma solidity 0.8.19;
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IGauge} from "velodrome-finance/contracts/interfaces/IGauge.sol";
 import {IRouter} from "velodrome-finance/contracts/interfaces/IRouter.sol";
-import {Pool} from "velodrome-finance/contracts/Pool.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {Vault} from "./Vault.sol";
@@ -52,39 +51,6 @@ contract Tranche {
         maturityTimestamp = _maturityTimestamp;
         taker = _taker;
         vault = msg.sender;
-    }
-
-    function addLiquidity() external returns (uint256, uint256, uint256) {
-        uint256 makerBalance = IERC20(Vault(vault).makerToken()).balanceOf(address(this));
-        uint256 takerBalance = IERC20(Vault(vault).takerToken()).balanceOf(address(this));
-        bool makerApproval = IERC20(Vault(vault).makerToken()).approve(Vault(vault).router(), makerBalance);
-        bool takerApproval = IERC20(Vault(vault).takerToken()).approve(Vault(vault).router(), takerBalance);
-        if (!makerApproval && !takerApproval) revert("Approval failed");
-
-        (uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) = IRouter(Vault(vault).router()).addLiquidity(
-            Vault(vault).makerToken(),
-            Vault(vault).takerToken(),
-            Vault(vault).stable(),
-            makerBalance,
-            takerBalance,
-            1,
-            1,
-            address(this),
-            block.timestamp
-        );
-
-        uint256 remainingMakerBalance = IERC20(Vault(vault).makerToken()).balanceOf(address(this));
-        if (remainingMakerBalance > 0) IERC20(Vault(vault).makerToken()).safeTransfer(vault, remainingMakerBalance);
-
-        uint256 remainingTakerBalance = IERC20(Vault(vault).takerToken()).balanceOf(address(this));
-        if (remainingTakerBalance > 0) IERC20(Vault(vault).takerToken()).safeTransfer(taker, remainingTakerBalance);
-
-        bool approval = Pool(Vault(vault).pool()).approve(Vault(vault).gauge(), liquidity);
-        if (!approval) revert("Approval failed");
-
-        IGauge(Vault(vault).gauge()).deposit(liquidity);
-
-        return (makerDeposit, takerDeposit, liquidity);
     }
 
     function withdrawTokens()

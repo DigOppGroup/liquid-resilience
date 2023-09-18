@@ -7,6 +7,7 @@ import {IGauge} from "velodrome-finance/contracts/interfaces/IGauge.sol";
 import {IPool} from "velodrome-finance/contracts/interfaces/IPool.sol";
 import {IRouter} from "velodrome-finance/contracts/interfaces/IRouter.sol";
 import {IVoter} from "velodrome-finance/contracts/interfaces/IVoter.sol";
+import {Pool} from "velodrome-finance/contracts/Pool.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {Tranche} from "./Tranche.sol";
@@ -102,7 +103,6 @@ contract Vault {
         if (!trancheCreationEnabled) revert TrancheCreationDisabled();
         if (_takerAmount == 0) revert InsufficientAmount({amount: _takerAmount});
         Tranche tranche = new Tranche(block.timestamp + maturity, msg.sender);
-        //        tranches.push(address(tranche));
         _tranches.add(address(tranche));
 
         IERC20(takerToken).safeTransferFrom(msg.sender, address(this), _takerAmount);
@@ -124,9 +124,34 @@ contract Vault {
             revert TransferFailure({token: takerToken, to: address(tranche), amount: quoteAmountB});
         }
 
-        (uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) = tranche.addLiquidity();
+        (uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) = addLiquidity(msg.sender);
 
         return (address(tranche), makerDeposit, takerDeposit, liquidity);
+    }
+
+    function addLiquidity(address _taker) external returns (uint256, uint256, uint256) {
+        uint256 makerBalance = IERC20(makerToken).balanceOf(address(this));
+        uint256 takerBalance = IERC20(takerToken).balanceOf(address(this));
+        bool makerApproval = IERC20(makerToken).approve(router, makerBalance);
+        bool takerApproval = IERC20(takerToken).approve(router, takerBalance);
+        if (!makerApproval && !takerApproval) revert("Approval failed");
+
+        (uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) = IRouter(router).addLiquidity(
+            makerToken, takerToken, stable, makerBalance, takerBalance, 1, 1, address(this), block.timestamp
+        );
+
+        uint256 remainingMakerBalance = IERC20(makerToken).balanceOf(address(this));
+        if (remainingMakerBalance > 0) IERC20(makerToken).safeTransfer(vault, remainingMakerBalance);
+
+        uint256 remainingTakerBalance = IERC20(takerToken).balanceOf(address(this));
+        if (remainingTakerBalance > 0) IERC20(takerToken).safeTransfer(_taker, remainingTakerBalance);
+
+        bool approval = Pool(pool).approve(gauge, liquidity);
+        if (!approval) revert("Approval failed");
+
+        IGauge(gauge).deposit(liquidity);
+
+        return (makerDeposit, takerDeposit, liquidity);
     }
 
     function makerWithdrawTokensFromVault(uint256 _amount) external authorized(maker) {
