@@ -4,7 +4,6 @@ pragma solidity 0.8.19;
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IGauge} from "velodrome-finance/contracts/interfaces/IGauge.sol";
 import {IRouter} from "velodrome-finance/contracts/interfaces/IRouter.sol";
-import {IVoter} from "velodrome-finance/contracts/interfaces/IVoter.sol";
 import {Pool} from "velodrome-finance/contracts/Pool.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -80,29 +79,12 @@ contract Tranche {
         uint256 remainingTakerBalance = IERC20(Vault(vault).takerToken()).balanceOf(address(this));
         if (remainingTakerBalance > 0) IERC20(Vault(vault).takerToken()).safeTransfer(taker, remainingTakerBalance);
 
-        address gauge = getGauge();
-        address pool = Vault(vault).getPool();
-        //        bool approval = Pool(Vault(vault).pool()).approve(gauge, liquidity);
-        bool approval = Pool(pool).approve(gauge, liquidity);
+        bool approval = Pool(Vault(vault).pool()).approve(Vault(vault).gauge(), liquidity);
         if (!approval) revert("Approval failed");
 
-        IGauge(gauge).deposit(liquidity);
+        IGauge(Vault(vault).gauge()).deposit(liquidity);
 
         return (makerDeposit, takerDeposit, liquidity);
-    }
-
-    function getGauge() public view returns (address) {
-        Vault v = Vault(vault);
-        address pool = v.getPool();
-        IVoter voter = IVoter(IRouter(v.router()).voter());
-        address gauge = voter.gauges(pool);
-        return gauge;
-    }
-
-    function getRewardToken() public view returns (address) {
-        address gauge = getGauge();
-        address rewardToken = IGauge(gauge).rewardToken();
-        return rewardToken;
     }
 
     function withdrawTokens()
@@ -111,13 +93,11 @@ contract Tranche {
         maturityReached
         returns (uint256 makerWithdrawal, uint256 takerWithdrawal)
     {
-        address gauge = getGauge();
-        uint256 liquidity = IGauge(gauge).balanceOf(address(this));
-        IGauge(gauge).withdraw(liquidity);
+        uint256 liquidity = IGauge(Vault(vault).gauge()).balanceOf(address(this));
+        IGauge(Vault(vault).gauge()).withdraw(liquidity);
         IRouter router = IRouter(Vault(vault).router());
 
-        address pool = Vault(vault).getPool();
-        bool approval = Pool(pool).approve(address(router), liquidity);
+        bool approval = Pool(Vault(vault).pool()).approve(address(router), liquidity);
         if (!approval) revert("Approval failed");
 
         (uint256 _makerWithdrawal, uint256 _takerWithdrawal) = router.removeLiquidity(
@@ -138,19 +118,17 @@ contract Tranche {
     }
 
     function withdrawRewards() public isInvestor returns (uint256 makerRewards, uint256 takerRewards, uint256 fees) {
-        address gauge = getGauge();
-        IGauge(gauge).getReward(address(this));
-        address rewardToken = getRewardToken();
+        IGauge(Vault(vault).gauge()).getReward(address(this));
 
-        uint256 rewardBalance = IERC20(rewardToken).balanceOf(address(this));
+        uint256 rewardBalance = IERC20(Vault(vault).rewardToken()).balanceOf(address(this));
         uint256 _fees = rewardBalance * Vault(vault).feeBasisPoints() / Vault(vault).BPS();
         uint256 rewardsPostFees = rewardBalance - _fees;
         uint256 _makerRewards = rewardsPostFees * Vault(vault).makerRevenueBasisPoints() / Vault(vault).BPS();
         uint256 _takerRewards = rewardsPostFees - _makerRewards;
 
-        IERC20(rewardToken).safeTransfer(Vault(vault).maker(), _makerRewards);
-        IERC20(rewardToken).safeTransfer(taker, _takerRewards);
-        IERC20(rewardToken).safeTransfer(VaultFactory(Vault(vault).vaultFactory()).owner(), _fees);
+        IERC20(Vault(vault).rewardToken()).safeTransfer(Vault(vault).maker(), _makerRewards);
+        IERC20(Vault(vault).rewardToken()).safeTransfer(taker, _takerRewards);
+        IERC20(Vault(vault).rewardToken()).safeTransfer(VaultFactory(Vault(vault).vaultFactory()).owner(), _fees);
 
         return (_makerRewards, _takerRewards, _fees);
     }

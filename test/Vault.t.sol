@@ -172,8 +172,8 @@ contract VaultTest is Test, TestHelpers {
     }
 
     function test_TakerCreatesTranche() public {
-        uint256 makerTokenPoolBal = IERC20(MAKER_TOKEN).balanceOf(vault.getPool());
-        uint256 takerTokenPoolBal = IERC20(TAKER_TOKEN).balanceOf(vault.getPool());
+        uint256 makerTokenPoolBal = IERC20(MAKER_TOKEN).balanceOf(vault.pool());
+        uint256 takerTokenPoolBal = IERC20(TAKER_TOKEN).balanceOf(vault.pool());
         vm.startPrank(vault.maker());
         deal(MAKER_TOKEN, vault.maker(), makerAmount, true);
         IERC20(MAKER_TOKEN).approve(address(vault), makerAmount);
@@ -195,15 +195,15 @@ contract VaultTest is Test, TestHelpers {
         assertEq(IERC20(MAKER_TOKEN).balanceOf(address(tranche)), 0);
         assertEq(IERC20(TAKER_TOKEN).balanceOf(address(tranche)), 0);
         assertEq(IERC20(TAKER_TOKEN).balanceOf(TAKER), takerAmount - takerDeposit);
-        assertEq(IERC20(MAKER_TOKEN).balanceOf(vault.getPool()), makerTokenPoolBal + makerDeposit);
-        assertEq(IERC20(TAKER_TOKEN).balanceOf(vault.getPool()), takerTokenPoolBal + takerDeposit);
+        assertEq(IERC20(MAKER_TOKEN).balanceOf(vault.pool()), makerTokenPoolBal + makerDeposit);
+        assertEq(IERC20(TAKER_TOKEN).balanceOf(vault.pool()), takerTokenPoolBal + takerDeposit);
         assertGt(liquidity, 0);
-        assertEq(IGauge(t.getGauge()).balanceOf(address(tranche)), liquidity);
+        assertEq(IGauge(vault.gauge()).balanceOf(address(tranche)), liquidity);
     }
 
     function test_TakerCreatesTrancheAfterPreviousDisablingOfVault() public {
-        uint256 makerTokenPoolBal = IERC20(MAKER_TOKEN).balanceOf(vault.getPool());
-        uint256 takerTokenPoolBal = IERC20(TAKER_TOKEN).balanceOf(vault.getPool());
+        uint256 makerTokenPoolBal = IERC20(MAKER_TOKEN).balanceOf(vault.pool());
+        uint256 takerTokenPoolBal = IERC20(TAKER_TOKEN).balanceOf(vault.pool());
         vm.startPrank(vault.maker());
         deal(MAKER_TOKEN, vault.maker(), makerAmount, true);
         IERC20(MAKER_TOKEN).approve(address(vault), makerAmount);
@@ -227,10 +227,10 @@ contract VaultTest is Test, TestHelpers {
         assertEq(IERC20(MAKER_TOKEN).balanceOf(address(tranche)), 0);
         assertEq(IERC20(TAKER_TOKEN).balanceOf(address(tranche)), 0);
         assertEq(IERC20(TAKER_TOKEN).balanceOf(TAKER), takerAmount - takerDeposit);
-        assertEq(IERC20(MAKER_TOKEN).balanceOf(vault.getPool()), makerTokenPoolBal + makerDeposit);
-        assertEq(IERC20(TAKER_TOKEN).balanceOf(vault.getPool()), takerTokenPoolBal + takerDeposit);
+        assertEq(IERC20(MAKER_TOKEN).balanceOf(vault.pool()), makerTokenPoolBal + makerDeposit);
+        assertEq(IERC20(TAKER_TOKEN).balanceOf(vault.pool()), takerTokenPoolBal + takerDeposit);
         assertGt(liquidity, 0);
-        assertEq(IGauge(t.getGauge()).balanceOf(address(tranche)), liquidity);
+        assertEq(IGauge(vault.gauge()).balanceOf(address(tranche)), liquidity);
     }
 
     function testRevertWhen_NonMakerTriesToWithdrawFromVault() public {

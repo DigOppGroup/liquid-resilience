@@ -61,7 +61,7 @@ contract TrancheTest is Test, TestHelpers {
     function test_MakerWithdrawsTokens() public {
         uint256 vaultMakerBalance = ERC20(MAKER_TOKEN).balanceOf(address(vault));
         uint256 takerBalance = ERC20(TAKER_TOKEN).balanceOf(TAKER);
-        assertEq(IGauge(tranche.getGauge()).balanceOf(address(tranche)), liquidity);
+        assertEq(IGauge(vault.gauge()).balanceOf(address(tranche)), liquidity);
         vm.warp(block.timestamp + 30 days);
 
         vm.prank(MAKER);
@@ -69,7 +69,7 @@ contract TrancheTest is Test, TestHelpers {
 
         assertEq(ERC20(MAKER_TOKEN).balanceOf(address(vault)), vaultMakerBalance + makerWithdrawal);
         assertEq(ERC20(TAKER_TOKEN).balanceOf(tranche.taker()), takerBalance + takerWithdrawal);
-        assertEq(IGauge(tranche.getGauge()).balanceOf(address(tranche)), 0);
+        assertEq(IGauge(vault.gauge()).balanceOf(address(tranche)), 0);
         assertEq(ERC20(MAKER_TOKEN).balanceOf(address(tranche)), 0);
         assertEq(ERC20(TAKER_TOKEN).balanceOf(address(tranche)), 0);
     }
@@ -82,7 +82,7 @@ contract TrancheTest is Test, TestHelpers {
 
     function test_MakerWithdrawsRewards() public {
         address vaultFactoryOwner = VaultFactory(vault.vaultFactory()).owner();
-        address rewardToken = tranche.getRewardToken();
+        address rewardToken = vault.rewardToken();
         assertEq(ERC20(rewardToken).balanceOf(MAKER), 0);
         assertEq(ERC20(rewardToken).balanceOf(TAKER), 0);
         assertEq(ERC20(rewardToken).balanceOf(vaultFactoryOwner), 0);
@@ -118,7 +118,7 @@ contract TrancheTest is Test, TestHelpers {
 
         assertEq(ERC20(MAKER_TOKEN).balanceOf(address(vault)), vaultMakerBalance + makerWithdrawal);
         assertEq(ERC20(TAKER_TOKEN).balanceOf(tranche.taker()), takerBalance + takerWithdrawal);
-        assertEq(IGauge(tranche.getGauge()).balanceOf(address(tranche)), 0);
+        assertEq(IGauge(vault.gauge()).balanceOf(address(tranche)), 0);
         assertEq(ERC20(MAKER_TOKEN).balanceOf(address(tranche)), 0);
         assertEq(ERC20(TAKER_TOKEN).balanceOf(address(tranche)), 0);
     }

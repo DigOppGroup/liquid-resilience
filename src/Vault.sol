@@ -1,10 +1,12 @@
-// SPDX-License-Identifier: BUSL-1.1
+    // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.19;
 
 import {EnumerableSet} from "openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {IGauge} from "velodrome-finance/contracts/interfaces/IGauge.sol";
 import {IPool} from "velodrome-finance/contracts/interfaces/IPool.sol";
 import {IRouter} from "velodrome-finance/contracts/interfaces/IRouter.sol";
+import {IVoter} from "velodrome-finance/contracts/interfaces/IVoter.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {Tranche} from "./Tranche.sol";
@@ -15,10 +17,13 @@ contract Vault {
     using SafeERC20 for IERC20;
 
     uint16 public immutable feeBasisPoints;
+    address public immutable gauge;
     address public immutable maker;
     uint16 public immutable makerRevenueBasisPoints;
     address public immutable makerToken;
     uint256 public immutable maturity;
+    address public immutable pool;
+    address public immutable rewardToken;
     address public immutable router;
     uint16 private slippageBasisPoints;
     bool public immutable stable;
@@ -60,14 +65,17 @@ contract Vault {
         require(_makerToken != address(0), "makerToken address cannot be zero");
         require(_router != address(0), "router address cannot be zero");
         require(_maker != address(0), "maker address cannot be zero");
-        address pool = IRouter(_router).poolFor(_makerToken, _takerToken, _stable, IRouter(_router).defaultFactory());
+        pool = IRouter(_router).poolFor(_makerToken, _takerToken, _stable, IRouter(_router).defaultFactory());
+        IVoter voter = IVoter(IRouter(_router).voter());
         require(pool != address(0), "pool address cannot be zero");
 
         feeBasisPoints = _feeBasisPoints;
+        gauge = voter.gauges(pool);
         maker = _maker;
         makerRevenueBasisPoints = _makerRevenueBasisPoints;
         makerToken = _makerToken;
         maturity = _maturity;
+        rewardToken = IGauge(gauge).rewardToken();
         router = _router;
         slippageBasisPoints = _slippageBasisPoints;
         stable = _stable;
@@ -97,7 +105,6 @@ contract Vault {
         //        tranches.push(address(tranche));
         _tranches.add(address(tranche));
 
-        address pool = getPool();
         IERC20(takerToken).safeTransferFrom(msg.sender, address(this), _takerAmount);
         (uint256 quoteAmountA, uint256 quoteAmountB,) = IRouter(router).quoteAddLiquidity(
             makerToken,
@@ -159,10 +166,5 @@ contract Vault {
 
     function tranches() external view returns (address[] memory) {
         return _tranches.values();
-    }
-
-    function getPool() public view returns (address) {
-        address pool = IRouter(router).poolFor(makerToken, takerToken, stable, IRouter(router).defaultFactory());
-        return pool;
     }
 }
