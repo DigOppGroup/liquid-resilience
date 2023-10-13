@@ -118,7 +118,6 @@ contract Vault {
     /// @return vaultDeposit amount of token0 deposited by the vault into the tranche, which was added to the LP
     /// @return takerDeposit amount of token1 deposited by the taker into the tranche, which was added to the LP
     /// @return liquidity amount of LP tokens minted for the tranche
-
     function createTranche(uint256 _takerAmount)
         external
         validAmount(takerToken, _takerAmount)
