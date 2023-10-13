@@ -149,14 +149,14 @@ contract VaultTest is Test, TestHelpers {
         uint256 depositAmount = 1000;
         deal(MAKER_TOKEN, MAKER, depositAmount, true);
         IERC20(MAKER_TOKEN).approve(address(vault), depositAmount - 1);
-        vm.expectRevert(abi.encodeWithSelector(Vault.InsufficientAllowance.selector, MAKER_TOKEN, depositAmount));
+        vm.expectRevert(abi.encodeWithSelector(Vault.InsufficientAmount.selector, MAKER_TOKEN, depositAmount));
 
         vm.prank(MAKER);
         vault.depositTokens(depositAmount);
     }
 
     function testRevertWhen_ZeroTokensDepositedIntoVault() public {
-        vm.expectRevert(abi.encodeWithSelector(Vault.InsufficientAmount.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(Vault.InsufficientAmount.selector, MAKER_TOKEN, 0));
         vm.prank(MAKER);
         vault.depositTokens(0);
     }
@@ -175,7 +175,7 @@ contract VaultTest is Test, TestHelpers {
 
     function testRevertWhen_TakerAmountIsZero() public {
         vm.startPrank(MAKER);
-        vm.expectRevert(abi.encodeWithSelector(Vault.InsufficientAmount.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(Vault.InsufficientAmount.selector, TAKER_TOKEN, 0));
         vault.createTranche(0);
         vm.stopPrank();
     }
@@ -210,40 +210,6 @@ contract VaultTest is Test, TestHelpers {
         assertEq(IGauge(vault.gauge()).balanceOf(address(tranche)), liquidity);
     }
 
-    /* TODO
-    function test_TakerCreatesTrancheAfterPreviousDisablingOfVault() public {
-        uint256 makerTokenPoolBal = IERC20(MAKER_TOKEN).balanceOf(vault.pool());
-        uint256 takerTokenPoolBal = IERC20(TAKER_TOKEN).balanceOf(vault.pool());
-        vm.startPrank(vault.maker());
-        deal(MAKER_TOKEN, vault.maker(), makerAmount, true);
-        IERC20(MAKER_TOKEN).approve(address(vault), makerAmount);
-        vault.depositTokens(makerAmount);
-        vault.disableTrancheCreation();
-        vault.enableTrancheCreation();
-        vm.stopPrank();
-
-        vm.startPrank(TAKER);
-        deal(TAKER_TOKEN, TAKER, takerAmount, true);
-        IERC20(TAKER_TOKEN).approve(address(vault), takerAmount);
-        (address tranche, uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) =
-            vault.createTranche(takerAmount);
-        Tranche t = Tranche(tranche);
-        vm.stopPrank();
-
-        assertEq(t.taker(), TAKER);
-        assertEq(t.maturityTimestamp(), block.timestamp + DEFAULT_MATURITY);
-        assertEq(IERC20(MAKER_TOKEN).balanceOf(address(vault)), makerAmount - makerDeposit);
-        assertEq(IERC20(TAKER_TOKEN).balanceOf(address(vault)), 0);
-        assertEq(IERC20(MAKER_TOKEN).balanceOf(address(tranche)), 0);
-        assertEq(IERC20(TAKER_TOKEN).balanceOf(address(tranche)), 0);
-        assertEq(IERC20(TAKER_TOKEN).balanceOf(TAKER), takerAmount - takerDeposit);
-        assertEq(IERC20(MAKER_TOKEN).balanceOf(vault.pool()), makerTokenPoolBal + makerDeposit);
-        assertEq(IERC20(TAKER_TOKEN).balanceOf(vault.pool()), takerTokenPoolBal + takerDeposit);
-        assertGt(liquidity, 0);
-        assertEq(IGauge(vault.gauge()).balanceOf(address(tranche)), liquidity);
-    }
-    */
-
     function testRevertWhen_NonMakerTriesToWithdrawFromVault() public {
         vm.expectRevert(abi.encodeWithSelector(Vault.Unauthorized.selector, TAKER, MAKER));
         vm.prank(TAKER);
@@ -251,7 +217,7 @@ contract VaultTest is Test, TestHelpers {
     }
 
     function testRevertWhen_WithdrawAmountIsZero() public {
-        vm.expectRevert(abi.encodeWithSelector(Vault.InsufficientAmount.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(Vault.InsufficientAmount.selector, MAKER_TOKEN, 0));
         vm.prank(MAKER);
         vault.makerWithdrawTokensFromVault(0);
     }

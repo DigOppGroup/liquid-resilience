@@ -35,8 +35,7 @@ contract Vault {
     EnumerableSet.AddressSet private _tranches;
 
     error ExceedsMaxBPS(uint256 bps, uint256 maxBPS);
-    error InsufficientAllowance(address token, uint256 amount);
-    error InsufficientAmount(uint256 amount);
+    error InsufficientAmount(address token, uint256 amount);
     error InsufficientBalance(uint256 amount, uint256 balance);
     error TrancheCreationDisabled();
     error TransferFailure(address token, address to, uint256 amount);
@@ -47,15 +46,10 @@ contract Vault {
         _;
     }
 
-    modifier validAllowance(address _token, uint256 _amount) {
-        if (_amount > IERC20(_token).allowance(msg.sender, address(this))) {
-            revert InsufficientAllowance({token: _token, amount: _amount});
+    modifier validAmount(address _token, uint256 _amount) {
+        if (_amount == 0 || _amount > 0 && _amount > IERC20(_token).allowance(msg.sender, address(this))) {
+            revert InsufficientAmount({token: _token, amount: _amount});
         }
-        _;
-    }
-
-    modifier validAmount(uint256 _amount) {
-        if (_amount == 0) revert InsufficientAmount({amount: _amount});
         _;
     }
 
@@ -100,13 +94,21 @@ contract Vault {
     /// @notice deposits maker tokens into the vault
     /// @dev the maker/caller must approve sending the funds to the vault prior to calling this function
     /// @param _amount amount of maker tokens to deposit
-    function depositTokens(uint256 _amount)
-        external
-        authorized(maker)
-        validAllowance(makerToken, _amount)
-        validAmount(_amount)
-    {
+    function depositTokens(uint256 _amount) external authorized(maker) validAmount(makerToken, _amount) {
         IERC20(makerToken).safeTransferFrom(msg.sender, address(this), _amount);
+    }
+
+    // TODO
+    function getQuoteAmounts(uint256 _takerAmount) public view returns (uint256, uint256) {
+        (uint256 quoteAmountA, uint256 quoteAmountB,) = IRouter(router).quoteAddLiquidity(
+            makerToken,
+            takerToken,
+            stable,
+            IPool(pool).factory(),
+            IERC20(makerToken).balanceOf(address(this)),
+            _takerAmount
+        );
+        return (quoteAmountA, quoteAmountB);
     }
 
     /// @notice Uses token1 provided by the taker (caller) to create a new tranche with existing maker tokens
@@ -116,23 +118,16 @@ contract Vault {
     /// @return vaultDeposit amount of token0 deposited by the vault into the tranche, which was added to the LP
     /// @return takerDeposit amount of token1 deposited by the taker into the tranche, which was added to the LP
     /// @return liquidity amount of LP tokens minted for the tranche
+
     function createTranche(uint256 _takerAmount)
         external
-        allowance(takerToken, _takerAmount)
-        validAmount(_takerAmount)
+        validAmount(takerToken, _takerAmount)
         returns (address, uint256, uint256, uint256)
     {
         if (!trancheCreationEnabled) revert TrancheCreationDisabled();
         Tranche tranche = new Tranche(block.timestamp + maturity, msg.sender);
 
-        (uint256 quoteAmountA, uint256 quoteAmountB,) = IRouter(router).quoteAddLiquidity(
-            makerToken,
-            takerToken,
-            stable,
-            IPool(pool).factory(),
-            IERC20(makerToken).balanceOf(address(this)),
-            _takerAmount
-        );
+        (uint256 quoteAmountA, uint256 quoteAmountB) = getQuoteAmounts(_takerAmount);
 
         IERC20(takerToken).safeTransferFrom(msg.sender, address(this), quoteAmountB);
         IERC20(makerToken).approve(router, quoteAmountA);
@@ -151,12 +146,13 @@ contract Vault {
         );
 
         tranche.stakeLiquidity(liquidity);
+        IERC20(takerToken).safeTransfer(msg.sender, IERC20(takerToken).balanceOf(address(this)));
         _tranches.add(address(tranche));
         return (address(tranche), vaultDeposit, takerDeposit, liquidity);
     }
 
     function makerWithdrawTokensFromVault(uint256 _amount) external authorized(maker) {
-        if (_amount == 0) revert InsufficientAmount({amount: _amount});
+        if (_amount == 0) revert InsufficientAmount({token: makerToken, amount: _amount});
         if (_amount > IERC20(makerToken).balanceOf(address(this))) {
             revert InsufficientBalance({amount: _amount, balance: IERC20(makerToken).balanceOf(address(this))});
         }
