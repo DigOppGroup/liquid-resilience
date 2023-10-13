@@ -17,7 +17,7 @@ import {TestHelpers} from "./utils/TestHelpers.sol";
 contract TrancheTest is Test, TestHelpers {
     Tranche private tranche;
     Vault private vault;
-    uint256 private makerDeposit;
+    uint256 private vaultDeposit;
     uint256 private takerDeposit;
     uint256 private liquidity;
 
@@ -132,14 +132,16 @@ contract TrancheTest is Test, TestHelpers {
 
             vm.startPrank(TAKER);
             deal(TAKER_TOKEN, TAKER, takerAmount, true);
-            ERC20(TAKER_TOKEN).approve(address(vault), takerAmount);
-            (address _tranche, uint256 _makerDeposit, uint256 _takerDeposit, uint256 _liquidity) =
+            ERC20(TAKER_TOKEN).approve(vault.router(), takerAmount);
+            (address _tranche, uint256 _vaultDeposit, uint256 _takerDeposit, uint256 _liquidity) =
                 vault.createTranche(takerAmount);
             tranche = Tranche(_tranche);
-            makerDeposit = _makerDeposit;
+            vaultDeposit = _vaultDeposit;
             takerDeposit = _takerDeposit;
             liquidity = _liquidity;
             vm.stopPrank();
+
+            return tranche;
         }
         uint256 i = vault.getTranchesSize() - 1;
         address[] memory t = vault.tranches();

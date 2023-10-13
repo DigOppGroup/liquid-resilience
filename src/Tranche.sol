@@ -4,6 +4,7 @@ pragma solidity 0.8.19;
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IGauge} from "velodrome-finance/contracts/interfaces/IGauge.sol";
 import {IRouter} from "velodrome-finance/contracts/interfaces/IRouter.sol";
+import {Pool} from "velodrome-finance/contracts/Pool.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {Vault} from "./Vault.sol";
@@ -53,6 +54,12 @@ contract Tranche {
         vault = msg.sender;
     }
 
+    function stakeLiquidity(uint256 liquidity) external authorized(vault) {
+        bool approval = Pool(Vault(vault).pool()).approve(Vault(vault).gauge(), liquidity);
+        if (!approval) revert("Approval failed");
+        IGauge(Vault(vault).gauge()).deposit(liquidity);
+    }
+
     function withdrawTokens()
         public
         isInvestor
@@ -63,7 +70,7 @@ contract Tranche {
         IGauge(Vault(vault).gauge()).withdraw(liquidity);
         IRouter router = IRouter(Vault(vault).router());
 
-        bool approval = Pool(Vault(vault).pool()).approve(address(router), liquidity);
+        bool approval = Pool(Vault(vault).pool()).approve(Vault(vault).router(), liquidity);
         if (!approval) revert("Approval failed");
 
         (uint256 _makerWithdrawal, uint256 _takerWithdrawal) = router.removeLiquidity(

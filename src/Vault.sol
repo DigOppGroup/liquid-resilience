@@ -35,6 +35,7 @@ contract Vault {
     EnumerableSet.AddressSet private _tranches;
 
     error ExceedsMaxBPS(uint256 bps, uint256 maxBPS);
+    error InsufficientAllowance(address token, uint256 amount);
     error InsufficientAmount(uint256 amount);
     error InsufficientBalance(uint256 amount, uint256 balance);
     error TrancheCreationDisabled();
@@ -43,6 +44,18 @@ contract Vault {
 
     modifier authorized(address _authority) {
         if (msg.sender != _authority) revert Unauthorized({caller: msg.sender, authority: _authority});
+        _;
+    }
+
+    modifier validAllowance(address _token, uint256 _amount) {
+        if (_amount > IERC20(_token).allowance(msg.sender, address(this))) {
+            revert InsufficientAllowance({token: _token, amount: _amount});
+        }
+        _;
+    }
+
+    modifier validAmount(uint256 _amount) {
+        if (_amount == 0) revert InsufficientAmount({amount: _amount});
         _;
     }
 
@@ -87,8 +100,12 @@ contract Vault {
     /// @notice deposits maker tokens into the vault
     /// @dev the maker/caller must approve sending the funds to the vault prior to calling this function
     /// @param _amount amount of maker tokens to deposit
-    function depositTokens(uint256 _amount) external authorized(maker) {
-        if (_amount == 0) revert InsufficientAmount({amount: _amount});
+    function depositTokens(uint256 _amount)
+        external
+        authorized(maker)
+        validAllowance(makerToken, _amount)
+        validAmount(_amount)
+    {
         IERC20(makerToken).safeTransferFrom(msg.sender, address(this), _amount);
     }
 
@@ -96,16 +113,18 @@ contract Vault {
     /// @dev the taker must approve the router to spend the taker token prior to the call
     /// @param _takerAmount amount of token1 provided by the taker
     /// @return tranche address of the newly created tranche
-    /// @return makerDeposit amount of token0 deposited by the maker into the tranche, which was added to the LP
+    /// @return vaultDeposit amount of token0 deposited by the vault into the tranche, which was added to the LP
     /// @return takerDeposit amount of token1 deposited by the taker into the tranche, which was added to the LP
     /// @return liquidity amount of LP tokens minted for the tranche
-    function createTranche(uint256 _takerAmount) external returns (address, uint256, uint256, uint256) {
+    function createTranche(uint256 _takerAmount)
+        external
+        allowance(takerToken, _takerAmount)
+        validAmount(_takerAmount)
+        returns (address, uint256, uint256, uint256)
+    {
         if (!trancheCreationEnabled) revert TrancheCreationDisabled();
-        if (_takerAmount == 0) revert InsufficientAmount({amount: _takerAmount});
         Tranche tranche = new Tranche(block.timestamp + maturity, msg.sender);
-        _tranches.add(address(tranche));
 
-        IERC20(takerToken).safeTransferFrom(msg.sender, address(this), _takerAmount);
         (uint256 quoteAmountA, uint256 quoteAmountB,) = IRouter(router).quoteAddLiquidity(
             makerToken,
             takerToken,
@@ -115,43 +134,25 @@ contract Vault {
             _takerAmount
         );
 
-        bool makerTransferToTranche = IERC20(makerToken).transfer(address(tranche), quoteAmountA);
-        if (!makerTransferToTranche) {
-            revert TransferFailure({token: makerToken, to: address(tranche), amount: quoteAmountA});
-        }
-        bool takerTransferToTranche = IERC20(takerToken).transfer(address(tranche), quoteAmountB);
-        if (!takerTransferToTranche) {
-            revert TransferFailure({token: takerToken, to: address(tranche), amount: quoteAmountB});
-        }
+        IERC20(takerToken).safeTransferFrom(msg.sender, address(this), quoteAmountB);
+        IERC20(makerToken).approve(router, quoteAmountA);
+        IERC20(takerToken).approve(router, quoteAmountB);
 
-        (uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) = addLiquidity(msg.sender);
-
-        return (address(tranche), makerDeposit, takerDeposit, liquidity);
-    }
-
-    function addLiquidity(address _taker) external returns (uint256, uint256, uint256) {
-        uint256 makerBalance = IERC20(makerToken).balanceOf(address(this));
-        uint256 takerBalance = IERC20(takerToken).balanceOf(address(this));
-        bool makerApproval = IERC20(makerToken).approve(router, makerBalance);
-        bool takerApproval = IERC20(takerToken).approve(router, takerBalance);
-        if (!makerApproval && !takerApproval) revert("Approval failed");
-
-        (uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) = IRouter(router).addLiquidity(
-            makerToken, takerToken, stable, makerBalance, takerBalance, 1, 1, address(this), block.timestamp
+        (uint256 vaultDeposit, uint256 takerDeposit, uint256 liquidity) = IRouter(router).addLiquidity(
+            makerToken,
+            takerToken,
+            stable,
+            quoteAmountA,
+            quoteAmountB,
+            0, // amountAMin
+            0, // amountBMin
+            address(tranche),
+            block.timestamp
         );
 
-        uint256 remainingMakerBalance = IERC20(makerToken).balanceOf(address(this));
-        if (remainingMakerBalance > 0) IERC20(makerToken).safeTransfer(vault, remainingMakerBalance);
-
-        uint256 remainingTakerBalance = IERC20(takerToken).balanceOf(address(this));
-        if (remainingTakerBalance > 0) IERC20(takerToken).safeTransfer(_taker, remainingTakerBalance);
-
-        bool approval = Pool(pool).approve(gauge, liquidity);
-        if (!approval) revert("Approval failed");
-
-        IGauge(gauge).deposit(liquidity);
-
-        return (makerDeposit, takerDeposit, liquidity);
+        tranche.stakeLiquidity(liquidity);
+        _tranches.add(address(tranche));
+        return (address(tranche), vaultDeposit, takerDeposit, liquidity);
     }
 
     function makerWithdrawTokensFromVault(uint256 _amount) external authorized(maker) {
