@@ -18,12 +18,13 @@ import {TestHelpers} from "./utils/TestHelpers.sol";
 contract TrancheTest is Test, TestHelpers {
     Tranche private tranche;
     Vault private vault;
+    VaultFactory private factory;
     uint256 private vaultDeposit;
     uint256 private takerDeposit;
     uint256 private liquidity;
 
     function setUp() public {
-        VaultFactory factory = new VaultFactory(basisPointFee);
+        factory = new VaultFactory(basisPointFee);
         vault = Vault(
             factory.createVault(
                 MAKER,
@@ -36,7 +37,7 @@ contract TrancheTest is Test, TestHelpers {
                 TAKER_TOKEN
             )
         );
-        tranche = getTranche();
+        tranche = getTranche(vault);
     }
 
     function testRevertWhen_MaturityIsInvalid() public {
@@ -91,10 +92,68 @@ contract TrancheTest is Test, TestHelpers {
         vm.prank(MAKER);
         (uint256 makerRewards, uint256 takerRewards, uint256 fees) = tranche.withdrawRewards();
 
-        assertEq(makerRewards, ERC20(rewardToken).balanceOf(MAKER));
-        assertEq(takerRewards, ERC20(rewardToken).balanceOf(TAKER));
+        assertEq(ERC20(rewardToken).balanceOf(MAKER), makerRewards);
+        assertEq(ERC20(rewardToken).balanceOf(TAKER), takerRewards);
         assertEq(ERC20(rewardToken).balanceOf(address(tranche)), 0);
         assertEq(ERC20(rewardToken).balanceOf(vaultFactoryOwner), fees);
+    }
+
+    function test_TakerWithdrawsRewardsWithNoMakerFees() public {
+        // Set the maker rev share to 0
+        Vault v = Vault(
+            factory.createVault(
+                MAKER, 0, MAKER_TOKEN, DEFAULT_MATURITY, ROUTER, slippageBasisPoints, STABLE, TAKER_TOKEN
+            )
+        );
+        Tranche t = getTranche(v);
+        address vaultFactoryOwner = VaultFactory(v.vaultFactory()).owner();
+        address rewardToken = v.rewardToken();
+        assertEq(ERC20(rewardToken).balanceOf(MAKER), 0);
+        assertEq(ERC20(rewardToken).balanceOf(TAKER), 0);
+        assertEq(ERC20(rewardToken).balanceOf(vaultFactoryOwner), 0);
+        vm.warp(block.timestamp + 100 days);
+
+        vm.prank(TAKER);
+        (uint256 makerRewards, uint256 takerRewards, uint256 fees) = t.withdrawRewards();
+
+        assertEq(ERC20(rewardToken).balanceOf(MAKER), makerRewards);
+        assertEq(ERC20(rewardToken).balanceOf(MAKER), 0);
+        assertEq(ERC20(rewardToken).balanceOf(TAKER), takerRewards);
+        assertEq(ERC20(rewardToken).balanceOf(address(t)), 0);
+        assertEq(ERC20(rewardToken).balanceOf(vaultFactoryOwner), fees);
+    }
+
+    function test_TakerWithdrawsRewardsWithNoProtocolFees() public {
+        // Set the protocol fee to 0
+        VaultFactory f = new VaultFactory(0);
+        Vault v = Vault(
+            f.createVault(
+                MAKER,
+                makerRevBasisPoints,
+                MAKER_TOKEN,
+                DEFAULT_MATURITY,
+                ROUTER,
+                slippageBasisPoints,
+                STABLE,
+                TAKER_TOKEN
+            )
+        );
+        Tranche t = getTranche(v);
+        address vaultFactoryOwner = VaultFactory(v.vaultFactory()).owner();
+        address rewardToken = v.rewardToken();
+        assertEq(ERC20(rewardToken).balanceOf(MAKER), 0);
+        assertEq(ERC20(rewardToken).balanceOf(TAKER), 0);
+        assertEq(ERC20(rewardToken).balanceOf(vaultFactoryOwner), 0);
+        vm.warp(block.timestamp + 100 days);
+
+        vm.prank(TAKER);
+        (uint256 makerRewards, uint256 takerRewards, uint256 fees) = t.withdrawRewards();
+
+        assertEq(ERC20(rewardToken).balanceOf(MAKER), makerRewards);
+        assertEq(ERC20(rewardToken).balanceOf(TAKER), takerRewards);
+        assertEq(ERC20(rewardToken).balanceOf(address(t)), 0);
+        assertEq(ERC20(rewardToken).balanceOf(vaultFactoryOwner), fees);
+        assertEq(ERC20(rewardToken).balanceOf(vaultFactoryOwner), 0);
     }
 
     function testRevertWhen_NonInvestorTriesEmergencyLiquidation() public {
@@ -123,19 +182,19 @@ contract TrancheTest is Test, TestHelpers {
         assertEq(ERC20(TAKER_TOKEN).balanceOf(address(tranche)), 0);
     }
 
-    function getTranche() public returns (Tranche) {
-        if (vault.getTranchesSize() == 0) {
+    function getTranche(Vault _vault) public returns (Tranche) {
+        if (_vault.getTranchesSize() == 0) {
             vm.startPrank(MAKER);
             deal(MAKER_TOKEN, MAKER, makerAmount, true);
-            ERC20(MAKER_TOKEN).approve(address(vault), makerAmount);
-            vault.depositTokens(makerAmount);
+            ERC20(MAKER_TOKEN).approve(address(_vault), makerAmount);
+            _vault.depositTokens(makerAmount);
             vm.stopPrank();
 
             vm.startPrank(TAKER);
             deal(TAKER_TOKEN, TAKER, takerAmount, true);
-            ERC20(TAKER_TOKEN).approve(address(vault), takerAmount);
+            ERC20(TAKER_TOKEN).approve(address(_vault), takerAmount);
             (address _tranche, uint256 _vaultDeposit, uint256 _takerDeposit, uint256 _liquidity) =
-                vault.createTranche(takerAmount);
+                _vault.createTranche(takerAmount);
             tranche = Tranche(_tranche);
             vaultDeposit = _vaultDeposit;
             takerDeposit = _takerDeposit;
@@ -144,8 +203,8 @@ contract TrancheTest is Test, TestHelpers {
 
             return tranche;
         }
-        uint256 i = vault.getTranchesSize() - 1;
-        address[] memory t = vault.tranches();
+        uint256 i = _vault.getTranchesSize() - 1;
+        address[] memory t = _vault.tranches();
         return Tranche(t[i]);
     }
 }

@@ -99,9 +99,12 @@ contract Tranche {
         uint256 _makerRewards = rewardsPostFees * Vault(vault).makerRevenueBasisPoints() / Vault(vault).BPS();
         uint256 _takerRewards = rewardsPostFees - _makerRewards;
 
-        IERC20(Vault(vault).rewardToken()).safeTransfer(Vault(vault).maker(), _makerRewards);
-        IERC20(Vault(vault).rewardToken()).safeTransfer(taker, _takerRewards);
-        IERC20(Vault(vault).rewardToken()).safeTransfer(VaultFactory(Vault(vault).vaultFactory()).owner(), _fees);
+        if (_makerRewards > 0) IERC20(Vault(vault).rewardToken()).safeTransfer(Vault(vault).maker(), _makerRewards);
+        if (_takerRewards > 0) IERC20(Vault(vault).rewardToken()).safeTransfer(taker, _takerRewards);
+        if (_fees > 0) {
+            address vaultFactoryOwner = VaultFactory(Vault(vault).vaultFactory()).owner();
+            IERC20(Vault(vault).rewardToken()).safeTransfer(vaultFactoryOwner, _fees);
+        }
 
         return (_makerRewards, _takerRewards, _fees);
     }
