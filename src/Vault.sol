@@ -98,7 +98,7 @@ contract Vault {
         IERC20(makerToken).safeTransferFrom(msg.sender, address(this), _amount);
     }
 
-    // TODO
+    /// @dev this is a wrapper around quoteAddLiquidity to avoid issues with stack depth
     function getQuoteAmounts(uint256 _takerAmount) public view returns (uint256, uint256) {
         (uint256 quoteAmountA, uint256 quoteAmountB,) = IRouter(router).quoteAddLiquidity(
             makerToken,
