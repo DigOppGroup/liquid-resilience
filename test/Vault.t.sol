@@ -321,6 +321,41 @@ contract VaultTest is Test, TestHelpers {
         vault.setSlippageBasisPoints(excessSlippage);
     }
 
+    function test_TakerCreatesTrancheAfterPreviousDisablingOfVault() public {
+        deal(MAKER_TOKEN, vault.maker(), makerAmount, true);
+        deal(TAKER_TOKEN, TAKER, takerAmount, true);
+        uint256 makerTokenPoolBal = IERC20(MAKER_TOKEN).balanceOf(vault.pool());
+        uint256 takerTokenPoolBal = IERC20(TAKER_TOKEN).balanceOf(vault.pool());
+
+        vm.startPrank(vault.maker());
+        IERC20(MAKER_TOKEN).approve(address(vault), makerAmount);
+        vault.depositTokens(makerAmount);
+        vault.disableTrancheCreation();
+        assertFalse(vault.trancheCreationEnabled());
+        vault.enableTrancheCreation();
+        assertTrue(vault.trancheCreationEnabled());
+        vm.stopPrank();
+
+        vm.startPrank(TAKER);
+        IERC20(TAKER_TOKEN).approve(address(vault), takerAmount);
+        (address tranche, uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) =
+            vault.createTranche(takerAmount);
+        Tranche t = Tranche(tranche);
+        vm.stopPrank();
+
+        assertEq(t.taker(), TAKER);
+        assertEq(t.maturityTimestamp(), block.timestamp + DEFAULT_MATURITY);
+        assertEq(IERC20(MAKER_TOKEN).balanceOf(address(vault)), makerAmount - makerDeposit);
+        assertEq(IERC20(TAKER_TOKEN).balanceOf(address(vault)), 0);
+        assertEq(IERC20(MAKER_TOKEN).balanceOf(address(tranche)), 0);
+        assertEq(IERC20(TAKER_TOKEN).balanceOf(address(tranche)), 0);
+        assertEq(IERC20(TAKER_TOKEN).balanceOf(TAKER), takerAmount - takerDeposit);
+        assertEq(IERC20(MAKER_TOKEN).balanceOf(vault.pool()), makerTokenPoolBal + makerDeposit);
+        assertEq(IERC20(TAKER_TOKEN).balanceOf(vault.pool()), takerTokenPoolBal + takerDeposit);
+        assertGt(liquidity, 0);
+        assertEq(IGauge(vault.gauge()).balanceOf(address(tranche)), liquidity);
+    }
+
     function buildTestTranche() private {
         vm.startPrank(vault.maker());
         deal(MAKER_TOKEN, vault.maker(), makerAmount, true);
