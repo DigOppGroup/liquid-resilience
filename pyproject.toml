@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "liquid-resilience-internal"
+name = "liquid-resilience"
 version = "0.1.0"
 description = ""
 authors = ["Brett Botto <brett@digopp.group>"]
