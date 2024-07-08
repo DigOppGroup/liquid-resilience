@@ -1,5 +1,5 @@
 {
-  "name": "lr-protocol",
+  "name": "liquid-resilience",
   "version": "1.0.0",
   "directories": {
     "lib": "lib",
@@ -9,9 +9,7 @@
     "format": "forge fmt",
     "format:check": "forge fmt --check",
     "lint:sol": "solhint \"./{src,test}/**/*.sol\"",
-    "lint:slither": "python -m slither . --config-file slither.config.json",
-    "test": "cross-env-shell OPTIMISM_RPC_FORK_URL=$OPTIMISM_RPC_FORK_URL forge test -vv --fork-url $OPTIMISM_RPC_FORK_URL",
-    "test:coverage": "cross-env OPTIMISM_RPC_FORK_URL=$OPTIMISM_RPC_FORK_URL forge coverage --report summary --fork-url ${OPTIMISM_RPC_FORK_URL}"
+    "lint:slither": "python -m slither . --config-file slither.config.json"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",

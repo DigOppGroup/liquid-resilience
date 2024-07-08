@@ -37,9 +37,10 @@ contract Tranche {
         _;
     }
 
-    modifier maturityReached() {
-        bool emergency = makerEmergencyBypass && takerEmergencyBypass;
-        if (block.timestamp < maturityTimestamp && !emergency) revert MaturityNotReached();
+    modifier canWithdrawTokens() {
+        bool emergencyBypass = makerEmergencyBypass && takerEmergencyBypass;
+        bool maturityNotReached = block.timestamp < maturityTimestamp;
+        if (maturityNotReached && !emergencyBypass) revert MaturityNotReached();
         _;
     }
 
@@ -55,69 +56,23 @@ contract Tranche {
         vault = msg.sender;
     }
 
-    function addLiquidity() external returns (uint256, uint256, uint256) {
-        uint256 makerBalance = IERC20(Vault(vault).makerToken()).balanceOf(address(this));
-        uint256 takerBalance = IERC20(Vault(vault).takerToken()).balanceOf(address(this));
-        bool makerApproval = IERC20(Vault(vault).makerToken()).approve(Vault(vault).router(), makerBalance);
-        bool takerApproval = IERC20(Vault(vault).takerToken()).approve(Vault(vault).router(), takerBalance);
-        if (!makerApproval && !takerApproval) revert("Approval failed");
-
-        (uint256 makerDeposit, uint256 takerDeposit, uint256 liquidity) = IRouter(Vault(vault).router()).addLiquidity(
-            Vault(vault).makerToken(),
-            Vault(vault).takerToken(),
-            Vault(vault).stable(),
-            makerBalance,
-            takerBalance,
-            1,
-            1,
-            address(this),
-            block.timestamp
-        );
-
-        uint256 remainingMakerBalance = IERC20(Vault(vault).makerToken()).balanceOf(address(this));
-        if (remainingMakerBalance > 0) IERC20(Vault(vault).makerToken()).safeTransfer(vault, remainingMakerBalance);
-
-        uint256 remainingTakerBalance = IERC20(Vault(vault).takerToken()).balanceOf(address(this));
-        if (remainingTakerBalance > 0) IERC20(Vault(vault).takerToken()).safeTransfer(taker, remainingTakerBalance);
-
-        address gauge = getGauge();
-        address pool = Vault(vault).getPool();
-        //        bool approval = Pool(Vault(vault).pool()).approve(gauge, liquidity);
-        bool approval = Pool(pool).approve(gauge, liquidity);
+    function stakeLiquidity(uint256 liquidity) external authorized(vault) {
+        bool approval = Pool(Vault(vault).pool()).approve(Vault(vault).gauge(), liquidity);
         if (!approval) revert("Approval failed");
-
-        IGauge(gauge).deposit(liquidity);
-
-        return (makerDeposit, takerDeposit, liquidity);
-    }
-
-    function getGauge() public view returns (address) {
-        Vault v = Vault(vault);
-        address pool = v.getPool();
-        IVoter voter = IVoter(IRouter(v.router()).voter());
-        address gauge = voter.gauges(pool);
-        return gauge;
-    }
-
-    function getRewardToken() public view returns (address) {
-        address gauge = getGauge();
-        address rewardToken = IGauge(gauge).rewardToken();
-        return rewardToken;
+        IGauge(Vault(vault).gauge()).deposit(liquidity);
     }
 
     function withdrawTokens()
         public
         isInvestor
-        maturityReached
+        canWithdrawTokens
         returns (uint256 makerWithdrawal, uint256 takerWithdrawal)
     {
-        address gauge = getGauge();
-        uint256 liquidity = IGauge(gauge).balanceOf(address(this));
-        IGauge(gauge).withdraw(liquidity);
+        uint256 liquidity = IGauge(Vault(vault).gauge()).balanceOf(address(this));
+        IGauge(Vault(vault).gauge()).withdraw(liquidity);
         IRouter router = IRouter(Vault(vault).router());
 
-        address pool = Vault(vault).getPool();
-        bool approval = Pool(pool).approve(address(router), liquidity);
+        bool approval = Pool(Vault(vault).pool()).approve(Vault(vault).router(), liquidity);
         if (!approval) revert("Approval failed");
 
         (uint256 _makerWithdrawal, uint256 _takerWithdrawal) = router.removeLiquidity(
@@ -138,19 +93,20 @@ contract Tranche {
     }
 
     function withdrawRewards() public isInvestor returns (uint256 makerRewards, uint256 takerRewards, uint256 fees) {
-        address gauge = getGauge();
-        IGauge(gauge).getReward(address(this));
-        address rewardToken = getRewardToken();
+        IGauge(Vault(vault).gauge()).getReward(address(this));
 
-        uint256 rewardBalance = IERC20(rewardToken).balanceOf(address(this));
+        uint256 rewardBalance = IERC20(Vault(vault).rewardToken()).balanceOf(address(this));
         uint256 _fees = rewardBalance * Vault(vault).feeBasisPoints() / Vault(vault).BPS();
         uint256 rewardsPostFees = rewardBalance - _fees;
         uint256 _makerRewards = rewardsPostFees * Vault(vault).makerRevenueBasisPoints() / Vault(vault).BPS();
         uint256 _takerRewards = rewardsPostFees - _makerRewards;
 
-        IERC20(rewardToken).safeTransfer(Vault(vault).maker(), _makerRewards);
-        IERC20(rewardToken).safeTransfer(taker, _takerRewards);
-        IERC20(rewardToken).safeTransfer(VaultFactory(Vault(vault).vaultFactory()).owner(), _fees);
+        if (_makerRewards > 0) IERC20(Vault(vault).rewardToken()).safeTransfer(Vault(vault).maker(), _makerRewards);
+        if (_takerRewards > 0) IERC20(Vault(vault).rewardToken()).safeTransfer(taker, _takerRewards);
+        if (_fees > 0) {
+            address vaultFactoryOwner = VaultFactory(Vault(vault).vaultFactory()).owner();
+            IERC20(Vault(vault).rewardToken()).safeTransfer(vaultFactoryOwner, _fees);
+        }
 
         return (_makerRewards, _takerRewards, _fees);
     }
