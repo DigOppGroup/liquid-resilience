@@ -6,9 +6,13 @@ import {Script} from "forge-std/Script.sol";
 import {VaultFactory} from "../src/VaultFactory.sol";
 
 contract DeployVaultFactory is Script {
-    uint256 public deployerPrivateKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
-    address public deployerAddress = vm.addr(deployerPrivateKey);
+    address private immutable deployerAddress;
     VaultFactory public vaultFactory;
+
+    constructor() {
+        uint256 deployerPrivateKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
+        deployerAddress = vm.addr(deployerPrivateKey);
+    }
 
     function run() external {
         vm.startBroadcast(deployerAddress);

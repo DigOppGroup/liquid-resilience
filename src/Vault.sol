@@ -1,4 +1,4 @@
-    // SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.19;
 
 import {EnumerableSet} from "openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
@@ -16,6 +16,8 @@ import {Tranche} from "./Tranche.sol";
 contract Vault {
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
+
+    event SlippageBasisPointsUpdated(uint16 oldBPS, uint16 newBPS);
 
     uint16 public immutable feeBasisPoints;
     address public immutable gauge;
@@ -47,7 +49,7 @@ contract Vault {
     }
 
     modifier validAmount(address _token, uint256 _amount) {
-        if (_amount == 0 || _amount > 0 && _amount > IERC20(_token).allowance(msg.sender, address(this))) {
+        if (_amount == 0 || _amount > IERC20(_token).allowance(msg.sender, address(this))) {
             revert InsufficientAmount({token: _token, amount: _amount});
         }
         _;
@@ -74,10 +76,9 @@ contract Vault {
         require(_router != address(0), "router address cannot be zero");
         require(_maker != address(0), "maker address cannot be zero");
         pool = IRouter(_router).poolFor(_makerToken, _takerToken, _stable, IRouter(_router).defaultFactory());
-        IVoter voter = IVoter(IRouter(_router).voter());
         require(pool != address(0), "pool address cannot be zero");
-
         feeBasisPoints = _feeBasisPoints;
+        IVoter voter = IVoter(IRouter(_router).voter());
         gauge = voter.gauges(pool);
         maker = _maker;
         makerRevenueBasisPoints = _makerRevenueBasisPoints;
@@ -99,8 +100,8 @@ contract Vault {
     }
 
     /// @dev this is a wrapper around quoteAddLiquidity to avoid issues with stack depth
-    function getQuoteAmounts(uint256 _takerAmount) public view returns (uint256, uint256) {
-        (uint256 quoteAmountA, uint256 quoteAmountB,) = IRouter(router).quoteAddLiquidity(
+    function getQuoteAmounts(uint256 _takerAmount) public view returns (uint256, uint256, uint256) {
+        (uint256 quoteAmountA, uint256 quoteAmountB, uint256 liquidity) = IRouter(router).quoteAddLiquidity(
             makerToken,
             takerToken,
             stable,
@@ -108,7 +109,7 @@ contract Vault {
             IERC20(makerToken).balanceOf(address(this)),
             _takerAmount
         );
-        return (quoteAmountA, quoteAmountB);
+        return (quoteAmountA, quoteAmountB, liquidity);
     }
 
     /// @notice Uses token1 provided by the taker (caller) to create a new tranche with existing maker tokens
@@ -126,11 +127,11 @@ contract Vault {
         if (!trancheCreationEnabled) revert TrancheCreationDisabled();
         Tranche tranche = new Tranche(block.timestamp + maturity, msg.sender);
 
-        (uint256 quoteAmountA, uint256 quoteAmountB) = getQuoteAmounts(_takerAmount);
+        (uint256 quoteAmountA, uint256 quoteAmountB,) = getQuoteAmounts(_takerAmount);
 
         IERC20(takerToken).safeTransferFrom(msg.sender, address(this), quoteAmountB);
-        IERC20(makerToken).approve(router, quoteAmountA);
-        IERC20(takerToken).approve(router, quoteAmountB);
+        IERC20(makerToken).safeApprove(router, quoteAmountA);
+        IERC20(takerToken).safeApprove(router, quoteAmountB);
 
         (uint256 vaultDeposit, uint256 takerDeposit, uint256 liquidity) = IRouter(router).addLiquidity(
             makerToken,
@@ -146,7 +147,8 @@ contract Vault {
 
         tranche.stakeLiquidity(liquidity);
         IERC20(takerToken).safeTransfer(msg.sender, IERC20(takerToken).balanceOf(address(this)));
-        _tranches.add(address(tranche));
+        bool trancheAdded = _tranches.add(address(tranche));
+        if (!trancheAdded) revert("Tranche already exists");
         return (address(tranche), vaultDeposit, takerDeposit, liquidity);
     }
 
@@ -182,7 +184,9 @@ contract Vault {
         authorized(maker)
         validBasisPoints(_slippageBasisPoints)
     {
+        uint16 oldBasisPoints = slippageBasisPoints;
         slippageBasisPoints = _slippageBasisPoints;
+        emit SlippageBasisPointsUpdated(oldBasisPoints, slippageBasisPoints);
     }
 
     function tranches() external view returns (address[] memory) {

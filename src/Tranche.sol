@@ -4,6 +4,7 @@ pragma solidity 0.8.19;
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IGauge} from "velodrome-finance/contracts/interfaces/IGauge.sol";
 import {IRouter} from "velodrome-finance/contracts/interfaces/IRouter.sol";
+import {IVoter} from "velodrome-finance/contracts/interfaces/IVoter.sol";
 import {Pool} from "velodrome-finance/contracts/Pool.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -36,9 +37,10 @@ contract Tranche {
         _;
     }
 
-    modifier maturityReached() {
-        bool emergency = makerEmergencyBypass && takerEmergencyBypass;
-        if (block.timestamp < maturityTimestamp && !emergency) revert MaturityNotReached();
+    modifier canWithdrawTokens() {
+        bool emergencyBypass = makerEmergencyBypass && takerEmergencyBypass;
+        bool maturityNotReached = block.timestamp < maturityTimestamp;
+        if (maturityNotReached && !emergencyBypass) revert MaturityNotReached();
         _;
     }
 
@@ -63,7 +65,7 @@ contract Tranche {
     function withdrawTokens()
         public
         isInvestor
-        maturityReached
+        canWithdrawTokens
         returns (uint256 makerWithdrawal, uint256 takerWithdrawal)
     {
         uint256 liquidity = IGauge(Vault(vault).gauge()).balanceOf(address(this));

@@ -16,6 +16,7 @@ docs/
 # Misc Folders
 .deps/
 .idea/
+.venv/
 .vscode/
 artifacts/
 broadcast/
